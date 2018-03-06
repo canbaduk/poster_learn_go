@@ -1,0 +1,902 @@
+
+\usepackage{xparse}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usetikzlibrary{shapes}
+\usepackage{graphicx}
+\usepackage{relsize}
+
+% TODO can we rely on this package being available? should we?
+\usepackage{CJKutf8}
+
+% The most important thing, is the name
+\NewDocumentCommand{\goban}{}{\textit{goban}}
+
+% https://tex.stackexchange.com/questions/12010/how-can-i-invert-a-clip-selection-within-tikz/59168#59168
+% note: i think the "[reset cm]" part breaks our coords, so we dont use it
+\tikzset{
+    invclip/.style={
+        clip,
+        insert path={{(-16383.99999pt,-16383.99999pt) rectangle (16383.99999pt,16383.99999pt)}}
+    }
+}
+
+\ExplSyntaxOn
+
+% for debugging
+\cs_generate_variant:Nn \tl_to_str:n { x }
+
+\cs_generate_variant:Nn \clist_map_inline:nn { xn }
+\cs_generate_variant:Nn \clist_if_empty:nTF { xTF }
+
+% Aliases for simplifying the API somewhat
+\NewDocumentCommand{\gobanshow}{O{1em}mm}{\gobanshowa[#1]{#2}{#3}}
+\NewDocumentCommand{\gobanplace}{O{}O{}mm}{\gobanplacea[#1][#2]{#3}{#4}}
+\NewDocumentCommand{\gobanmark}{O{}O{}m}{\gobanmarka[#1][#2]{#3}}
+\NewDocumentCommand{\gobanplaceseq}{O{1}O{\gobanseqint}O{text}mm}{\gobanplaceseqa[#1][#2][#3]{#4}{#5}}
+% TODO more for other commands like 'gobanclear' etc. when they're created
+
+
+
+% 'abstract' dimensions for stone and board features
+% these are relative to \gobanbaseunit; the ratio is used internally as a multiple of 1em for text consistency.
+% it is a good idea to specify these in absolute units (so they aren't affected by the font size, unlike 'em').
+% the final absolute size of the board with \gobanshow is determined by the cell spacing supplied to it.
+\newlength{\gobanbaseunit}
+\setlength{\gobanbaseunit}{1.0cm}
+\newlength{\gobancellspacing}
+\setlength{\gobancellspacing}{1.0cm}
+\newlength{\gobanstonediameter}
+\setlength{\gobanstonediameter}{1.0cm}
+\newlength{\gobanstonelinewidth}
+\setlength{\gobanstonelinewidth}{0.05cm}
+\newlength{\gobanboardlinewidth}
+\setlength{\gobanboardlinewidth}{0.02cm}
+\newlength{\gobanboardborderwidth}
+\setlength{\gobanboardborderwidth}{0.1cm}
+\newlength{\gobanhoshidiameter}
+\setlength{\gobanhoshidiameter}{0.2cm}
+\newlength{\gobansymbollinewidth}
+\setlength{\gobansymbollinewidth}{0.05cm}
+
+\cs_new:Npn \goban_index_a: { 1 }
+\cs_new:Npn \goban_index_b: { 2 }
+\cs_new:Npn \goban_index_c: { 3 }
+\cs_new:Npn \goban_index_d: { 4 }
+\cs_new:Npn \goban_index_e: { 5 }
+\cs_new:Npn \goban_index_f: { 6 }
+\cs_new:Npn \goban_index_g: { 7 }
+\cs_new:Npn \goban_index_h: { 8 }
+\cs_new:Npn \goban_index_i: { 9 }
+\cs_new:Npn \goban_index_j: { 10 }
+\cs_new:Npn \goban_index_k: { 11 }
+\cs_new:Npn \goban_index_l: { 12 }
+\cs_new:Npn \goban_index_m: { 13 }
+\cs_new:Npn \goban_index_n: { 14 }
+\cs_new:Npn \goban_index_o: { 15 }
+\cs_new:Npn \goban_index_p: { 16 }
+\cs_new:Npn \goban_index_q: { 17 }
+\cs_new:Npn \goban_index_r: { 18 }
+\cs_new:Npn \goban_index_s: { 19 }
+\cs_new:Npn \goban_index_t: { 20 }
+\cs_new:Npn \goban_index_u: { 21 }
+\cs_new:Npn \goban_index_v: { 22 }
+\cs_new:Npn \goban_index_w: { 23 }
+\cs_new:Npn \goban_index_x: { 24 }
+\cs_new:Npn \goban_index_y: { 25 }
+\cs_new:Npn \goban_index_z: { 26 }
+\cs_new:Npn \goban_index_A: { 27 }
+\cs_new:Npn \goban_index_B: { 28 }
+\cs_new:Npn \goban_index_C: { 29 }
+\cs_new:Npn \goban_index_D: { 30 }
+\cs_new:Npn \goban_index_E: { 31 }
+\cs_new:Npn \goban_index_F: { 32 }
+\cs_new:Npn \goban_index_G: { 33 }
+\cs_new:Npn \goban_index_H: { 34 }
+\cs_new:Npn \goban_index_I: { 35 }
+\cs_new:Npn \goban_index_J: { 36 }
+\cs_new:Npn \goban_index_K: { 37 }
+\cs_new:Npn \goban_index_L: { 38 }
+\cs_new:Npn \goban_index_M: { 39 }
+\cs_new:Npn \goban_index_N: { 40 }
+\cs_new:Npn \goban_index_O: { 41 }
+\cs_new:Npn \goban_index_P: { 42 }
+\cs_new:Npn \goban_index_Q: { 43 }
+\cs_new:Npn \goban_index_R: { 44 }
+\cs_new:Npn \goban_index_S: { 45 }
+\cs_new:Npn \goban_index_T: { 46 }
+\cs_new:Npn \goban_index_U: { 47 }
+\cs_new:Npn \goban_index_V: { 48 }
+\cs_new:Npn \goban_index_W: { 49 }
+\cs_new:Npn \goban_index_X: { 50 }
+\cs_new:Npn \goban_index_Y: { 51 }
+\cs_new:Npn \goban_index_Z: { 52 }
+
+% enable '-' as a letter for a 'skipped' sequence element
+% skipping just puts the stone at an index that should get clipped off and not seen
+\cs_new:cpn {goban_index_-:} { -9 }
+
+% the current board
+\cs_gset:Npn \goban_current: { default }
+
+% set the current board
+\cs_new:Npn \goban_make_current:n #1
+{
+    \cs_gset:Npn \goban_current: { #1 }
+}
+
+\cs_generate_variant:Nn \goban_make_current:n { x }
+
+% coord-indexed properties of the current board
+\cs_new:Npn \goban_stone_cmd_prop: { g_goban_ \goban_current: _stone_cmd_prop }
+\cs_new:Npn \goban_descr_cmd_prop: { g_goban_ \goban_current: _descr_cmd_prop }
+\cs_new:Npn \goban_descr_val_prop: { g_goban_ \goban_current: _descr_val_prop }
+
+% size of the current board
+\cs_new:Npn \goban_sizex: { \use:c{ goban_ \goban_current: _sizex: } }
+\cs_new:Npn \goban_sizey: { \use:c{ goban_ \goban_current: _sizey: } }
+
+% set the size of a board
+\cs_new_protected:Npn \goban_set_size:nnn #1#2#3
+{
+    \cs_gset:cpn {goban_ #1 _sizex:} { #2 }
+    \cs_gset:cpn {goban_ #1 _sizey:} { #3 }
+}
+
+\cs_generate_variant:Nn \goban_set_size:nnn { xxx }
+
+% create a new board
+\NewDocumentCommand{\gobannew}{m}
+{
+    \prop_new:c{g_goban_#1_stone_cmd_prop}
+    \prop_new:c{g_goban_#1_descr_cmd_prop}
+    \prop_new:c{g_goban_#1_descr_val_prop}
+    \cs_gset:cpn {goban_#1_sizex:} { 19 }
+    \cs_gset:cpn {goban_#1_sizey:} { 19 }
+}
+
+% actually make the default board
+\gobannew{default}
+
+\NewDocumentCommand{\gobanuse}{m}
+{
+    \goban_make_current:x{#1}
+}
+
+\NewDocumentCommand{\gobansize}{mm}
+{
+    \goban_set_size:xxx{\goban_current:}{#1}{#2}
+}
+
+\NewDocumentCommand{\gobanclear}{}
+{
+    \prop_clear:c{\goban_stone_cmd_prop:}
+    \prop_clear:c{\goban_descr_cmd_prop:}
+    \prop_clear:c{\goban_descr_val_prop:}
+}
+
+\NewDocumentCommand{\gobancopyfrom}{m}
+{
+    \prop_set_eq:cc {\goban_stone_cmd_prop:} {g_goban_#1_stone_cmd_prop}
+    \prop_set_eq:cc {\goban_descr_cmd_prop:} {g_goban_#1_descr_cmd_prop}
+    \prop_set_eq:cc {\goban_descr_val_prop:} {g_goban_#1_descr_val_prop}
+    \goban_set_size:xxx {\goban_current:} {\use:c{goban_#1_sizex:}} {\use:c{goban_#1_sizey:}}
+}
+
+\NewDocumentCommand{\gobancopyto}{m}
+{
+    \prop_set_eq:cc {g_goban_#1_stone_cmd_prop} {\goban_stone_cmd_prop:}
+    \prop_set_eq:cc {g_goban_#1_descr_cmd_prop} {\goban_descr_cmd_prop:}
+    \prop_set_eq:cc {g_goban_#1_descr_val_prop} {\goban_descr_val_prop:}
+    \goban_set_size:xxx {#1} {\goban_sizex:} {\goban_sizey:}
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - 'white' etc
+% #4 - list of coord pairs {{x}{y}, {x}{y}, ...}
+\NewDocumentCommand{\gobanplacei}{O{}O{}mm}
+{
+    \clist_map_inline:nn { #4 }
+    {
+        \tl_if_blank:nTF { #1 #2 }
+        {
+            % mark args not supplied, can take from coord list
+            \gobanplaceonei {#3} ##1
+        }
+        {
+            % mark args supplied, assume coord list does not specify them
+            \gobanplaceonei {#3} ##1 [#1][\tl_if_blank:nTF{#2}{text}{#2}]
+        }
+    }
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - 'white' etc
+% #4 - list of coord letter pairs {aa, bb, ...} 
+\NewDocumentCommand{\gobanplacea}{O{}O{}mm}
+{
+    \clist_map_inline:nn { #4 }
+    {
+        \tl_if_blank:nTF { #1 #2 }
+        {
+            % mark args not supplied, can take from coord list
+            \gobanplaceonea {#3} ##1
+        }
+        {
+            % mark args supplied, assume coord list does not specify them
+            \gobanplaceonea {#3} ##1 [#1][\tl_if_blank:nTF{#2}{text}{#2}]
+        }
+    }
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - list of coord pairs {{x}{y}, {x}{y}, ...}
+\NewDocumentCommand{\gobanmarki}{O{}O{}m}
+{
+    \clist_map_inline:nn { #3 }
+    {
+        \tl_if_blank:nTF { #1 #2 }
+        {
+            % mark args not supplied, can take from coord list
+            \gobanmarkonei ##1
+        }
+        {
+            % mark args supplied, assume coord list does not specify them
+            \gobanmarkonei ##1 [#1][\tl_if_blank:nTF{#2}{text}{#2}]
+        }
+    }
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - list of coord letter pairs {aa, bb, ...}
+\NewDocumentCommand{\gobanmarka}{O{}O{}m}
+{
+    \clist_map_inline:nn { #3 }
+    {
+        \tl_if_blank:nTF { #1 #2 }
+        {
+            % mark args not supplied, can take from coord list
+            \gobanmarkonea ##1
+        }
+        {
+            % mark args supplied, assume coord list does not specify them
+            \gobanmarkonea ##1 [#1][\tl_if_blank:nTF{#2}{text}{#2}]
+        }
+    }
+}
+
+% default arg #2 to \gobanplaceseq
+\NewDocumentCommand{\gobanseqint}{m}{#1}
+
+% arg #2 candidate to \gobanplaceseq for ABC-numbered sequences
+\NewDocumentCommand{\gobanseqalpha}{m}{\int_to_Alph:n{#1}}
+
+% arg #2 candidate to \gobanplaceseq for non-numbered sequences
+\NewDocumentCommand{\gobanseqnone}{m}{}
+
+% #1 - start index
+% #2 - command to be passed sequence index
+% #3 - mark type
+% #4 - 'white' etc for first stone
+% #5 - list of coord pairs {{x}{y}, {x}{y}, ...}
+% coords cannot specify mark args
+\NewDocumentCommand{\gobanplaceseqi}{O{1}O{\gobanseqint}O{text}mm}
+{
+    % note: can safely pass # to :N if the cs gets expanded (i think)
+    \int_set:Nn \l_tmpa_int {#1}
+    \int_set:Nn \l_tmpb_int {\goban_stone_id:N{#4}}
+    \clist_map_inline:nn { #5 }
+    {
+        % \int_use:N expands to a \the primitive
+        \gobanplaceonei {\goban_stone_name:N{\int_use:N \l_tmpb_int}} ##1 [#2 {\int_use:N \l_tmpa_int}] [#3]
+        \int_incr:N \l_tmpa_int
+        \int_incr:N \l_tmpb_int
+        \int_set:Nn \l_tmpb_int {\int_mod:nn{\l_tmpb_int}{2}}
+    }
+}
+
+% #1 - start index
+% #2 - command to be passed sequence index
+% #3 - mark type
+% #4 - 'white' etc for first stone
+% #5 - list of coord pairs {{x}{y}, {x}{y}, ...}
+% coords cannot specify mark args
+\NewDocumentCommand{\gobanplaceseqa}{O{1}O{\gobanseqint}O{text}mm}
+{
+    % note: can safely pass # to :N if the cs gets expanded (i think)
+    \int_set:Nn \l_tmpa_int {#1}
+    \int_set:Nn \l_tmpb_int {\goban_stone_id:N{#4}}
+    \clist_map_inline:nn { #5 }
+    {
+        % \int_use:N expands to a \the primitive
+        \gobanplaceonea {\goban_stone_name:N{\int_use:N \l_tmpb_int}} ##1 [#2 {\int_use:N \l_tmpa_int}] [#3]
+        \int_incr:N \l_tmpa_int
+        \int_incr:N \l_tmpb_int
+        \int_set:Nn \l_tmpb_int {\int_mod:nn{\l_tmpb_int}{2}}
+    }
+}
+
+% #1 - 'white' etc
+% #2 - x
+% #3 - y
+% #4 - mark
+% #5 - mark type
+\NewDocumentCommand{\gobanplaceonei}{mmmO{}O{text}}
+{
+    \goban_set_stone:xxx {#1} {#2} {#3}
+    \goban_set_descr:xxxx {#5} {#4} {#2} {#3}
+}
+
+% #1 - 'white' etc
+% #2 - x letter
+% #3 - y letter
+% #4 - mark val
+% #5 - mark type
+\NewDocumentCommand{\gobanplaceonea}{mmmO{}O{text}}
+{
+    \gobanplaceonei {#1} {\goban_index:N{#2}} {\goban_index:N{#3}} [#4] [#5]
+}
+
+% #1 - x
+% #2 - y
+% #3 - mark val
+% #4 - mark type
+\NewDocumentCommand{\gobanmarkonei}{mmO{}O{text}}
+{
+    \goban_set_descr:xxxx {#4} {#3} {#1} {#2}
+}
+
+% #1 - x letter
+% #2 - y letter
+% #3 - mark val
+% #4 - mark type
+\NewDocumentCommand{\gobanmarkonea}{mmO{}O{text}}
+{
+    \gobanmarkonei {\goban_index:N{#1}} {\goban_index:N{#2}} [#3] [#4]
+}
+
+% #1 cell spacing (inter-cell period) as a dim
+\NewDocumentCommand{\gobanshowfull}{O{1em}}
+{
+    \goban_show_impl_i:xxxxx{#1}{1}{1}{\goban_sizex:}{\goban_sizey:}
+}
+
+% TODO param style?
+\NewDocumentCommand{\gobanshowi}{O{1em}mmmm}
+{
+    \goban_show_impl_i:xxxxx{#1}{#2}{#3}{#4}{#5}
+}
+
+% TODO param style?
+\NewDocumentCommand{\gobanshowa}{O{1em}mm}
+{
+    \goban_show_impl_a:xxxxx{#1} #2 #3
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - 'white' etc
+\NewExpandableDocumentCommand{\gobandrawstone}{mmm}
+{
+    \use:c{goban_stone_#3:nn} {0,0} {2}
+    \use:c{goban_descr_#2_#3:nn} {0,0} {#1}
+}
+
+% #1 - mark val
+% #2 - mark type
+% #3 - 'white' etc
+\NewDocumentCommand{\gobantextstone}{O{}O{text}m}
+{
+    \raisebox{-0.2em}{
+    \begin{tikzpicture}[x=\dimexpr 1em * \gobanstonediameter / \gobanbaseunit, y=\dimexpr 1em * \gobanstonediameter / \gobanbaseunit, yscale=-1]
+    \clip (-0.52, -0.52) rectangle (0.52, 0.52);
+    \gobandrawstone{#1}{#2}{#3}
+    \end{tikzpicture}
+    }
+}
+
+% draw/fill colors for mark symbols
+% note that tikz seems to understand fill=none, but not draw=none
+% on white stones (or holes)
+\cs_new:Npn \goban_mark_draw_white_: { black }
+\cs_new:Npn \goban_mark_fill_white_: { none }
+\cs_new:Npn \goban_mark_draw_white_none: { black }
+\cs_new:Npn \goban_mark_fill_white_none: { none }
+\cs_new:Npn \goban_mark_draw_white_auto: { black }
+\cs_new:Npn \goban_mark_fill_white_auto: { black }
+\cs_new:Npn \goban_mark_draw_white_white: { black }
+\cs_new:Npn \goban_mark_fill_white_white: { white }
+\cs_new:Npn \goban_mark_draw_white_black: { black }
+\cs_new:Npn \goban_mark_fill_white_black: { black }
+% on black stones
+\cs_new:Npn \goban_mark_draw_black_: { white }
+\cs_new:Npn \goban_mark_fill_black_: { none }
+\cs_new:Npn \goban_mark_draw_black_none: { white }
+\cs_new:Npn \goban_mark_fill_black_none: { none }
+\cs_new:Npn \goban_mark_draw_black_auto: { white }
+\cs_new:Npn \goban_mark_fill_black_auto: { white }
+\cs_new:Npn \goban_mark_draw_black_white: { white }
+\cs_new:Npn \goban_mark_fill_black_white: { white }
+\cs_new:Npn \goban_mark_draw_black_black: { white }
+\cs_new:Npn \goban_mark_fill_black_black: { black }
+
+% #1 - mark type to define
+% #2 - tikz command body to add after '\draw[...]' e.g. '(#1) node[...] {...}'
+%      #1 - node position (_not_ accounted for) as x,y (no '(')
+%      #2 - mark value
+% the mark value determines how the mark is filled, options are:
+% '', 'none', 'auto', 'white', 'black'
+\NewDocumentCommand{\gobandefinemark}{mm}
+{
+    % on white stone
+    \cs_gset:cpn {goban_descr_#1_white:nn} ##1##2
+    {
+        \draw[draw= \use:c{goban_mark_draw_white_##2:}, text= \use:c{goban_mark_draw_white_##2:}, fill= \use:c{goban_mark_fill_white_##2:}, line~width= \dimexpr 1em * \gobansymbollinewidth / \gobanbaseunit] #2 ;
+    }
+    % on black stone
+    \cs_gset:cpn {goban_descr_#1_black:nn} ##1##2
+    {
+        \draw[draw= \use:c{goban_mark_draw_black_##2:}, text= \use:c{goban_mark_draw_black_##2:}, fill= \use:c{goban_mark_fill_black_##2:}, line~width=\dimexpr 1em * \gobansymbollinewidth / \gobanbaseunit] #2 ;
+    }
+    % on hole
+    \cs_gset:cpn {goban_descr_#1_:nn} ##1##2
+    {
+        \use:c{goban_descr_#1_white:nn}{##1}{##2}
+    }
+}
+
+% #1 - coord label type to define
+% #2 - clist of label vals
+% #3 - command body to process label vals (#1 - label val)
+\NewDocumentCommand{\gobandefinecoordlabels}{mmm}
+{
+    \cs_gset:cpn {goban_coords_#1_vals:} {#2}
+    \cs_gset:cpn {goban_coords_#1_cmd:n} ##1 { #3 }
+}
+
+% #1 - top coord label type to use
+% #2 - bottom coord label type to use
+% #3 - left coord label type to use
+% #4 - right coord label type to use
+\NewDocumentCommand{\gobancoordlabels}{mmmm}
+{
+    \cs_gset:Npn \goban_tcoords_vals: {\cs_if_exist_use:c{goban_coords_#1_vals:}}
+    \cs_gset:Npn \goban_tcoords_cmd:n ##1 {\cs_if_exist_use:c{goban_coords_#1_cmd:n}{##1}}
+    \cs_gset:Npn \goban_bcoords_vals: {\cs_if_exist_use:c{goban_coords_#2_vals:}}
+    \cs_gset:Npn \goban_bcoords_cmd:n ##1 {\cs_if_exist_use:c{goban_coords_#2_cmd:n}{##1}}
+    \cs_gset:Npn \goban_lcoords_vals: {\cs_if_exist_use:c{goban_coords_#3_vals:}}
+    \cs_gset:Npn \goban_lcoords_cmd:n ##1 {\cs_if_exist_use:c{goban_coords_#3_cmd:n}{##1}}
+    \cs_gset:Npn \goban_rcoords_vals: {\cs_if_exist_use:c{goban_coords_#4_vals:}}
+    \cs_gset:Npn \goban_rcoords_cmd:n ##1 {\cs_if_exist_use:c{goban_coords_#4_cmd:n}{##1}}
+}
+
+% squash a pair of characters together vertically (#1 above #2) (for kanji coord labels)
+% or just show #1 if #2 is empty
+% TODO private
+\NewDocumentCommand{\gobansquashpair}{mm}
+{
+    \tl_if_empty:nTF{#2}
+    {
+        \vbox{#1}
+    }
+    {
+        \scalebox{1}[0.5]{\raisebox{-0.2em}{\vbox{\hbox{#1}\hbox{#2}}}}
+    }
+}
+
+\gobandefinecoordlabels{int}{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19}
+{
+    #1
+}
+
+\gobandefinecoordlabels{alpha}{a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s}
+{
+    #1
+}
+
+\gobandefinecoordlabels{Alpha}{A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S}
+{
+    #1
+}
+
+\gobandefinecoordlabels{korschelt}{a,b,c,d,e,f,g,h,j,k,l,m,n,o,p,q,r,s,t}
+{
+    #1
+}
+
+\gobandefinecoordlabels{Korschelt}{A,B,C,D,E,F,G,H,J,K,L,M,N,O,P,Q,R,S,T}
+{
+    #1
+}
+
+% TODO private
+\NewDocumentCommand{\gobankanjiichi}     {}{\begin{CJK}{UTF8}{min} 一 \end{CJK}}
+\NewDocumentCommand{\gobankanjini}       {}{\begin{CJK}{UTF8}{min} 二 \end{CJK}}
+\NewDocumentCommand{\gobankanjisan}      {}{\begin{CJK}{UTF8}{min} 三 \end{CJK}}
+\NewDocumentCommand{\gobankanjiyon}      {}{\begin{CJK}{UTF8}{min} 四 \end{CJK}}
+\NewDocumentCommand{\gobankanjigo}       {}{\begin{CJK}{UTF8}{min} 五 \end{CJK}}
+\NewDocumentCommand{\gobankanjiroku}     {}{\begin{CJK}{UTF8}{min} 六 \end{CJK}}
+\NewDocumentCommand{\gobankanjinana}     {}{\begin{CJK}{UTF8}{min} 七 \end{CJK}}
+\NewDocumentCommand{\gobankanjihachi}    {}{\begin{CJK}{UTF8}{min} 八 \end{CJK}}
+\NewDocumentCommand{\gobankanjikyuu}     {}{\begin{CJK}{UTF8}{min} 九 \end{CJK}}
+\NewDocumentCommand{\gobankanjijuu}      {}{\begin{CJK}{UTF8}{min} 十 \end{CJK}}
+\NewDocumentCommand{\gobankanjijuuichi}  {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{一} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuuni}    {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{二} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuusan}   {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{三} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuuyon}   {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{四} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuugo}    {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{五} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuuroku}  {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{六} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuunana}  {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{七} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuuhachi} {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{八} \end{CJK}}
+\NewDocumentCommand{\gobankanjijuukyuu}  {}{\begin{CJK}{UTF8}{min} \gobansquashpair{十}{九} \end{CJK}}
+
+% 一二三四五六七八九十
+\gobandefinecoordlabels{kanji}
+{
+    \gobankanjiichi,
+    \gobankanjini,
+    \gobankanjisan,
+    \gobankanjiyon,
+    \gobankanjigo,
+    \gobankanjiroku,
+    \gobankanjinana,
+    \gobankanjihachi,
+    \gobankanjikyuu,
+    \gobankanjijuu,
+    \gobankanjijuuichi,
+    \gobankanjijuuni,
+    \gobankanjijuusan,
+    \gobankanjijuuyon,
+    \gobankanjijuugo,
+    \gobankanjijuuroku,
+    \gobankanjijuunana,
+    \gobankanjijuuhachi,
+    \gobankanjijuukyuu
+}
+{
+    #1
+}
+
+% init coord label state (none)
+\gobancoordlabels{}{}{}{}
+
+% actual stone radius for drawing
+\cs_new:Npn \goban_stone_rad:
+{
+    \dimexpr 1em * \gobanstonediameter / (\gobanbaseunit * 2)
+}
+
+% actual hoshi radius for drawing
+\cs_new:Npn \goban_hoshi_rad:
+{
+    \dimexpr 1em * \gobanhoshidiameter / (\gobanbaseunit * 2)
+}
+
+% letters -> indices
+\cs_new:Npn \goban_index:N #1
+{
+    \use:c{goban_index_#1:}
+}
+
+% stone name -> id
+\cs_new:Npn \goban_stone_id:N #1
+{
+    \use:c{goban_stone_id_#1:}
+}
+
+\cs_generate_variant:Nn \goban_stone_id:N { x }
+
+% stone id -> name
+\cs_new:Npn \goban_stone_name:N #1
+{
+    \use:c{goban_stone_name_#1:}
+}
+
+\cs_generate_variant:Nn \goban_stone_name:N { x }
+
+\cs_new:Npn \goban_stone_id_black: { 0 }
+\cs_new:Npn \goban_stone_id_white: { 1 }
+\cs_new:cpn {goban_stone_name_0:} { black }
+\cs_new:cpn {goban_stone_name_1:} { white }
+
+% hole; this gets called when there isn't actually a stone
+\cs_new_protected:Npn \goban_stone_:nn #1#2
+{
+    \int_compare:nTF { #2 == 1 }
+    {
+        % clip out a stone-ish hole in phase 1, before the board is drawn
+        \path[invclip] (#1) circle [radius=\dimexpr 1em * (\gobanstonediameter - \gobanstonelinewidth * 2) / (\gobanbaseunit * 2)];
+    }
+    {}
+}
+
+% white stone
+\cs_new_protected:Npn \goban_stone_white:nn #1#2
+{
+    \int_compare:nTF { #2 == 2 }
+    {
+        % draw stone in phase 2, after board
+        \draw[fill=white, draw=black, line~width=\dimexpr 1em * \gobanstonelinewidth / \gobanbaseunit] (#1) circle [radius=\dimexpr 1em * (\gobanstonediameter - \gobanstonelinewidth) / (\gobanbaseunit * 2)];
+    }
+    {}
+}
+
+% black stone
+\cs_new_protected:Npn \goban_stone_black:nn #1#2
+{
+    \int_compare:nTF { #2 == 2 }
+    {
+        % draw stone in phase 2, after board
+        \draw[fill=black, draw=black, line~width=\dimexpr 1em * \gobanstonelinewidth / \gobanbaseunit] (#1) circle [radius=\dimexpr 1em * (\gobanstonediameter - \gobanstonelinewidth) / (\gobanbaseunit * 2)];
+    }
+    {}
+}
+
+% text on hole
+\cs_new_protected:Npn \goban_descr_text_:nn #1#2
+{
+    \goban_descr_text_white:nn{#1}{#2}
+}
+
+% text on white stone
+\cs_new_protected:Npn \goban_descr_text_white:nn #1#2
+{
+    \draw[text=black] (#1) node {\scalebox{0.6}[1.0]{\smaller{}\textbf{\textsf{#2}}}};
+}
+
+% text on black stone
+\cs_new_protected:Npn \goban_descr_text_black:nn #1#2
+{
+    \draw[text=white] (#1) node {\scalebox{0.6}[1.0]{\smaller{}\textbf{\textsf{#2}}}};
+}
+
+% TODO we have to know the coords system orientation to get the correct symbol orientation (relies on y-down atm)
+
+\gobandefinemark{triangle}
+{
+    %(#1) node[mark~size=\dimexpr (\goban_stone_rad: * 3) / 5] {\nullfont\pgfuseplotmark{triangle}}
+    let
+        \n{rad} = {(\gobanstonediameter * 2) / (\gobancellspacing * 6)}
+    in
+        ($ (#1) + \n{rad}*({cos(210)},{-sin(210)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(330)},{-sin(330)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(450)},{-sin(450)}) $) node{} --
+        cycle
+}
+
+\gobandefinemark{square}
+{
+    %(#1) node[mark~size=\dimexpr \goban_stone_rad: / 2] {\nullfont\pgfuseplotmark{square}}
+    let
+        \n{rad} = {(\gobanstonediameter * 2) / (\gobancellspacing * 6)}
+    in
+        ($ (#1) + \n{rad}*({cos(45)},{-sin(45)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(135)},{-sin(135)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(225)},{-sin(225)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(315)},{-sin(315)}) $) node{} --
+        cycle
+}
+
+\gobandefinemark{cross}
+{
+    %(#1) node[mark~size=\dimexpr \goban_stone_rad: / 2] {\nullfont\pgfuseplotmark{x}}
+    let
+        \n{rad} = {(\gobanstonediameter * 2) / (\gobancellspacing * 7)}
+    in
+        ($ (#1) + \n{rad}*({cos(45)},{-sin(45)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(225)},{-sin(225)}) $) node{}
+        ($ (#1) + \n{rad}*({cos(135)},{-sin(135)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(315)},{-sin(315)}) $) node{}
+}
+
+\gobandefinemark{diamond}
+{
+    %(#1) node[mark~size=\dimexpr (\goban_stone_rad: * 3) / 5] {\nullfont\pgfuseplotmark{diamond}}
+    let
+        \n{rad} = {(\gobanstonediameter * 2) / (\gobancellspacing * 6)}
+    in
+        ($ (#1) + 0.8*\n{rad}*({cos(0)},{-sin(0)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(90)},{-sin(90)}) $) node{} --
+        ($ (#1) + 0.8*\n{rad}*({cos(180)},{-sin(180)}) $) node{} --
+        ($ (#1) + \n{rad}*({cos(270)},{-sin(270)}) $) node{} --
+        cycle
+}
+
+% #1 - stone command name
+% #2 - x
+% #3 - y
+\cs_new_protected:Npn \goban_set_stone:nnn #1#2#3
+{
+    \prop_gput:cnn{\goban_stone_cmd_prop:} { #2,#3 } { #1 }
+}
+
+\cs_generate_variant:Nn \goban_set_stone:nnn { xxx }
+
+% #1 - mark command name
+% #2 - mark value
+% #3 - x
+% #4 - y
+\cs_new_protected:Npn \goban_set_descr:nnnn #1#2#3#4
+{
+    \prop_gput:cnn{\goban_descr_cmd_prop:} { #3,#4 } { #1 }
+    \prop_gput:cnn{\goban_descr_val_prop:} { #3,#4 } { #2 }
+}
+
+\cs_generate_variant:Nn \goban_set_descr:nnnn { xxxx }
+
+\cs_new_protected:Npn \goban_draw_grid:nn #1#2
+{
+    \draw[step=1, black, line~width=\dimexpr 1em * \gobanboardlinewidth / \gobanbaseunit] (0,0) grid (#1 - 1, #2 - 1);
+    \draw[black, line~width=\dimexpr 1em * \gobanboardborderwidth / \gobanbaseunit] (0,0) rectangle (#1 - 1, #2 - 1);
+    \cs_if_exist_use:c{goban_draw_hoshi_#1_#2:}
+}
+
+\cs_generate_variant:Nn \goban_draw_grid:nn { xx }
+
+\cs_new_protected:cpn {goban_draw_hoshi_19_19:}
+{
+    \draw[fill=black, draw=black] ( 3, 3) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] ( 3, 9) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] ( 3,15) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] ( 9, 3) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] ( 9, 9) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] ( 9,15) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (15, 3) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (15, 9) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (15,15) circle [radius=\goban_hoshi_rad:];
+}
+
+\cs_new_protected:cpn {goban_draw_hoshi_13_13:}
+{
+    \draw[fill=black, draw=black] (3,3) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (3,9) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (9,3) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (9,9) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (6,6) circle [radius=\goban_hoshi_rad:];
+}
+
+\cs_new_protected:cpn {goban_draw_hoshi_9_9:}
+{
+    \draw[fill=black, draw=black] (2,2) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (2,6) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (6,2) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (6,6) circle [radius=\goban_hoshi_rad:];
+    \draw[fill=black, draw=black] (4,4) circle [radius=\goban_hoshi_rad:];
+}
+
+% #1 - labels clist
+% #2 - first index
+% #3 - last index
+% #4 - command body (#1 - index, #2 - label val)
+\cs_new:Npn \goban_labels_map_inline:nnnn #1#2#3#4
+{
+    \group_begin:
+    \cs_set:Nn \bodycs:nn { #4 }
+    \clist_if_empty:xTF{#1} {}
+    {
+        \int_set:Nn \l_tmpa_int {1}
+        \clist_map_inline:xn{#1}
+        {
+            \int_compare:nTF { #2 <= \int_use:N \l_tmpa_int <= #3 }
+            {
+                \bodycs:nn {##1} {\int_use:N \l_tmpa_int}
+            }
+            {}
+            \int_incr:N \l_tmpa_int
+        }
+    }
+    \group_end:
+}
+
+% #1,#2 - min coord (int)
+% #3,#4 - max coord (int)
+% #5 - command body (#1 - x, #2 - y, #3 - descr cmd)
+\cs_new:Npn \goban_descrs_map_inline:nnnnn #1#2#3#4#5
+{
+    \group_begin:
+    \cs_set:Nn \bodycs:nnn { #5 }
+    \cs_generate_variant:Nn \bodycs:nnn { xxn }
+    \prop_map_inline:cn{\goban_descr_cmd_prop:}
+    {
+        % ##1 - coords
+        % ##2 - mark command
+        % extract the individual coords
+        \clist_set:Nn \l_tmpa_clist {##1}
+        \clist_pop:NN \l_tmpa_clist \l_tmpa_tl
+        \clist_pop:NN \l_tmpa_clist \l_tmpb_tl
+        % tikz clipping just sets a mask, so we'll do some actual clipping too
+        % TODO allow for partially visible stones?
+        \int_compare:nTF { #1 <= \tl_use:N \l_tmpa_tl <= #3 }
+        {
+            \int_compare:nTF { #2 <= \tl_use:N \l_tmpb_tl <= #4 }
+            {
+                \bodycs:xxn {\tl_use:N \l_tmpa_tl} {\tl_use:N \l_tmpb_tl} {##2}
+            }
+            {}
+        }
+        {}
+    }
+    \group_end:
+}
+
+% #1 - cell spacing
+% #2,#3 - min coord (int)
+% #4,#5 - max coord (int)
+\cs_new_protected:Npn \goban_show_impl_i:nnnnn #1#2#3#4#5
+{
+    % \tl_to_str:n{#4,#5} \\
+    % stones are drawn relative to text size; they are ~1em diameter.
+    % tikz scaling will not scale the text, so we instead scale the whole resulting box.
+    % stones start at (1,1) from the top left, while the tikzpicture has a (0,0) origin.
+    % we use a tikz yscale of -1 to make the origin upper-left.
+    \scalebox{\fp_eval:n { \dim_to_fp:n{#1} / \dim_to_fp:n{1em * \gobancellspacing / \gobanbaseunit} } } {
+    \begin{tikzpicture}[x=\dimexpr 1em * \gobancellspacing / \gobanbaseunit, y=\dimexpr 1em * \gobancellspacing / \gobanbaseunit, yscale=-1]
+    \begin{scope}
+    % seems the rectangle part specifies coords not size
+    \clip (#2 - 1.6, #3 - 1.6) rectangle (#4 - 0.4, #5 - 0.4);
+    % map over marks, draw stones (phase 1, before the board - can set up clip)
+    % scope limits hole clip to board drawing
+    \begin{scope}
+    \begin{pgfinterruptboundingbox}
+    \goban_descrs_map_inline:nnnnn{#2}{#3}{#4}{#5}
+    {
+        % clip out any holes
+        \use:c{goban_stone_ \prop_item:cn{\goban_stone_cmd_prop:}{##1,##2} :nn} {$ (-1, -1) + (##1,##2) $} {1}
+    }
+    % draw the board grid (and hoshi etc)
+    \goban_draw_grid:xx{\goban_sizex:}{\goban_sizey:}
+    \end{pgfinterruptboundingbox}
+    \end{scope}
+    % map over marks, draw stones underneath (phase 2, after the board)
+    % every stone will have a mark, it just might not do anything
+    \goban_descrs_map_inline:nnnnn{#2}{#3}{#4}{#5}
+    {
+        % draw any stones
+        \use:c{goban_stone_ \prop_item:cn{\goban_stone_cmd_prop:}{##1,##2} :nn} {$ (-1, -1) + (##1,##2) $} {2}
+        % draw the mark
+        \use:c{goban_descr_##3_ \prop_item:cn{\goban_stone_cmd_prop:}{##1,##2} :nn} {$ (-1, -1) + (##1,##2) $} {\prop_item:cn{\goban_descr_val_prop:}{##1,##2}}
+    }
+    \end{scope}
+    
+    % top labels
+    \goban_labels_map_inline:nnnn{\goban_tcoords_vals:}{#2}{#4}
+    {
+        \draw[] (##2 - 1, #3 - 1.9) node[anchor=base, align=center] {\textsmaller[2]{\goban_tcoords_cmd:n{##1}}};
+    }
+    
+    % bottom labels
+    \goban_labels_map_inline:nnnn{\goban_bcoords_vals:}{#2}{#4}
+    {
+        \draw[] (##2 - 1, #5 + 0.3) node[anchor=base] {\textsmaller[2]{\goban_bcoords_cmd:n{##1}}};
+    }
+    
+    % left labels
+    \goban_labels_map_inline:nnnn{\goban_lcoords_vals:}{#3}{#5}
+    {
+        \draw[] (#2 - 1.5, ##2 - 1) node[anchor=east] {\textsmaller[2]{\goban_lcoords_cmd:n{##1}}};
+    }
+    
+    % right labels
+    \goban_labels_map_inline:nnnn{\goban_rcoords_vals:}{#3}{#5}
+    {
+        \draw[] (#4 - 0.5, ##2 - 1) node[anchor=west] {\textsmaller[2]{\goban_rcoords_cmd:n{##1}}};
+    }
+    
+    \end{tikzpicture}
+    }
+}
+
+\cs_generate_variant:Nn \goban_show_impl_i:nnnnn { xxxxx }
+
+\cs_new_protected:Npn \goban_show_impl_a:nnnnn #1#2#3#4#5
+{
+    \goban_show_impl_i:xxxxx {#1} {\goban_index:N{#2}} {\goban_index:N{#3}} {\goban_index:N{#4}} {\goban_index:N{#5}}
+}
+
+\cs_generate_variant:Nn \goban_show_impl_a:nnnnn { xxxxx }
+
+\ExplSyntaxOff
